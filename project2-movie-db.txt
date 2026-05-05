@@ -1,0 +1,86 @@
+-- ============================================
+-- IT431 Project 2 — Movie Database Setup
+-- ============================================
+-- What this script does:
+--   1. Creates the `movies` table (or recreates it if it already exists)
+--   2. Enables Row Level Security
+--   3. Adds four RLS policies:
+--        - SELECT:  anyone (including anonymous) can read
+--        - INSERT:  only authenticated users, only their own rows
+--        - UPDATE:  only authenticated users, only their own rows
+--        - DELETE:  only authenticated users, only their own rows
+--   4. Inserts five sample rows owned by whichever user runs the script
+-- ============================================
+--
+-- ============================================
+-- 1. MOVIES TABLE
+-- ============================================
+DROP TABLE IF EXISTS movies CASCADE;
+
+CREATE TABLE movies (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     UUID REFERENCES auth.users(id) ON DELETE CASCADE DEFAULT auth.uid(),
+  title       TEXT NOT NULL,
+  director    TEXT NOT NULL,
+  genre       TEXT NOT NULL,
+  year        INTEGER NOT NULL CHECK (year >= 1888 AND year <= 2100),
+  runtime     INTEGER NOT NULL CHECK (runtime > 0),       -- minutes
+  rating      NUMERIC(3,1) CHECK (rating >= 0 AND rating <= 10),
+  description TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+-- ============================================
+-- 2. ROW LEVEL SECURITY
+-- ============================================
+ALTER TABLE movies ENABLE ROW LEVEL SECURITY;
+
+-- Anyone (including anonymous visitors) can READ.
+-- Required for the public Movies browse view.
+CREATE POLICY "Anyone can view movies"
+  ON movies
+  FOR SELECT
+  USING (true);
+
+-- Only signed-in users can INSERT, and only with their own user_id.
+-- The user_id column defaults to auth.uid() so the app doesn't have to set it.
+CREATE POLICY "Authenticated users can insert movies"
+  ON movies
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (auth.uid() = user_id);
+
+-- Only signed-in users can UPDATE, and only the rows they own.
+CREATE POLICY "Authenticated users can update movies"
+  ON movies
+  FOR UPDATE
+  TO authenticated
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Only signed-in users can DELETE, and only the rows they own.
+CREATE POLICY "Authenticated users can delete movies"
+  ON movies
+  FOR DELETE
+  TO authenticated
+  USING (auth.uid() = user_id);
+
+-- ============================================
+-- 3. SAMPLE DATA
+-- ============================================
+-- These rows will be assigned to whichever Supabase user is signed in to the
+-- SQL Editor at the time this script is run (the auth.uid() default).
+
+INSERT INTO movies (title, director, genre, year, runtime, rating, description)
+VALUES
+  ('The Shawshank Redemption', 'Frank Darabont',       'Drama',    1994, 142, 9.3,
+   'Two imprisoned men bond over years, finding solace and eventual redemption.'),
+  ('The Godfather',            'Francis Ford Coppola', 'Crime',    1972, 175, 9.2,
+   'The aging patriarch of a crime dynasty transfers control to his reluctant son.'),
+  ('Inception',                'Christopher Nolan',    'Sci-Fi',   2010, 148, 8.8,
+   'A thief steals corporate secrets through dream-sharing technology.'),
+  ('Parasite',                 'Bong Joon-ho',         'Thriller', 2019, 132, 8.5,
+   'Greed and class discrimination threaten two intertwined families.'),
+  ('The Dark Knight',          'Christopher Nolan',    'Action',   2008, 152, 9.0,
+   'Batman faces the Joker, a criminal mastermind set on anarchy.');
